@@ -93,8 +93,6 @@ int main() {
 
 	char * ips[amount_of_ips];
 
-	fp = fopen("file.txt","r");
-
 	int a;
 	for (a = 0; a < amount_of_ips; a++)
 	{

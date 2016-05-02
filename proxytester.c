@@ -20,7 +20,7 @@ int test_proxies (char * ips[], int amount_of_ips)
 		ip = strtok(ips[a], ":");
 		port = strtok(NULL, ":");
 
-		printf("%s::%s \n",ip,port);
+		printf("%s:%s \n",ip,port);
 
 		struct sockaddr_in server;
 		int sockfd;
@@ -30,40 +30,11 @@ int test_proxies (char * ips[], int amount_of_ips)
 		server.sin_addr.s_addr = inet_addr(ip);
 		server.sin_family = AF_INET;
 		server.sin_port = htons(atoi(port));
-
-		fcntl(sockfd, F_SETFL, O_NONBLOCK);
-
-		struct timeval tv;
-		fd_set writefds;
-
-		tv.tv_sec = 10;
-		tv.tv_usec = 500000;
-
-		FD_ZERO(&writefds);
-		FD_SET(sockfd, &writefds);
-
-
-		if( connect(sockfd, (struct sockaddr *)&server, sizeof(server)) < 0)
+				
+		if(connect(sockfd, (struct sockaddr *)&server, sizeof(server)) < 0)
 		{
-			if ( errno != EINPROGRESS ) {
-			return 0;
-			}
-		}
-		
-		if (select(sockfd + 1, NULL, &writefds, NULL, &tv) ==  1)
-		{
-
-			int so_error;
-			socklen_t len = sizeof so_error;
-
-			getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &so_error, &len);
-
-				if (so_error == 0) {
-				printf("Connection open");
-				fcntl(sockfd, F_SETFL, 0);
-				}
-		}
-		else {
+			printf("Error connecting \n \n");
+			free(ips[a]);
 			continue;
 		}
 		
@@ -71,18 +42,21 @@ int test_proxies (char * ips[], int amount_of_ips)
 
 		if (send(sockfd, request, strlen(request), 0) < 0)
 		{
-				printf("Error writing \n");
-				return 1;
+				printf("Error writing \n \n");
+				free(ips[a]);
+				continue;
 		}
 
 		char server_reply[5000];
 
 		if (recv(sockfd, server_reply, 5000, 0) < 1)
 		{
-			printf("Error receiving \n");
+			printf("Error receiving \n \n");
+			free(ips[a]);
+			continue;
 		}
 
-		printf("%s \n",server_reply);
+		printf("%s \n \n",server_reply);
 
 		free(ips[a]);
 

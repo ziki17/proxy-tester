@@ -65,9 +65,11 @@ int test_proxies (char * ips[], int amount_of_ips)
 
 
 
-int amount_ips (FILE * fp) {
-
+int amount_ips (char file[]) {
+	FILE * fp;
 	int ch, number_of_lines = 0;
+
+	fp = fopen(file,"r");
 
 	do 
 	{
@@ -75,6 +77,8 @@ int amount_ips (FILE * fp) {
 		if(ch == '\n')
 			number_of_lines++;
 	} while (ch != EOF);
+
+	fclose(fp);
 
 	return number_of_lines;
 }
@@ -84,12 +88,13 @@ int amount_ips (FILE * fp) {
 
 int main() {
 	FILE * fp;
-	char line[121];
+	char line[121];	
+	char file[] = "file.txt";
+        int amount_of_ips;
+	
+	fp = fopen(file,"r");
 
-	fp = fopen("file.txt","r");
-
-	int amount_of_ips;
-	amount_of_ips = amount_ips(fp);
+	amount_of_ips = amount_ips(file);
 
 	char * ips[amount_of_ips];
 

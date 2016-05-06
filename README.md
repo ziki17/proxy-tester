@@ -3,4 +3,4 @@
 #
 #Compile: gcc -o proxttester proxytester.c
 #
-#Usage: Run with following arguments... ./proxytester <proxies_file.txt> <output_file.txt>
+#Usage: Run with following arguments... ./proxytester proxies_file.txt output_file.txt

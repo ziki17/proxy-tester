@@ -7,14 +7,15 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <unistd.h>
 
-int test_proxies (char * ips[], int amount_of_ips)
+#define IP_PORT_SIZE 22
+
+int test_proxies (char ips[][IP_PORT_SIZE], int amount_of_ips, char output_file[])
 {
-
 	int a;
 	for(a = 0; a < amount_of_ips; a++)
 	{
-
 	   	char *ip;
 	  	char *port;
 		ip = strtok(ips[a], ":");
@@ -33,37 +34,44 @@ int test_proxies (char * ips[], int amount_of_ips)
 				
 		if(connect(sockfd, (struct sockaddr *)&server, sizeof(server)) < 0)
 		{
-			printf("Error connecting \n \n");
-			free(ips[a]);
+			//printf("Error connecting \n\n");
 			continue;
 		}
 		
-		char request[] = "HEAD http:/\/www.google.com HTTP/1.1\r\nHost: www.google.com\r\n\r\n";
+		char request[] = "HEAD http://www.msn.com HTTP/1.0\r\n\r\n";
 
 		if (send(sockfd, request, strlen(request), 0) < 0)
 		{
-				printf("Error writing \n \n");
-				free(ips[a]);
-				continue;
-		}
-
-		char server_reply[5000];
-
-		if (recv(sockfd, server_reply, 5000, 0) < 1)
-		{
-			printf("Error receiving \n \n");
-			free(ips[a]);
+			//printf("Error writing \n\n");	
 			continue;
 		}
 
-		printf("%s \n \n",server_reply);
+		char server_reply[500];
+		
+		if (recv(sockfd, server_reply, 500, 0) < 0)
+		{
+			//printf("Error receiving \n\n");
+			continue;
+		}
 
-		free(ips[a]);
-
+		//printf("%s \n \n",server_reply);
+		
+		close(sockfd);
+		
+		if (strstr(server_reply,"HTTP/1.1 200") || 
+			strstr(server_reply,"HTTP/1.1 302") ||
+			strstr(server_reply,"HTTP/1.0 200") || 
+			strstr(server_reply,"HTTP/1.0 302"))
+		{
+			FILE * fp;
+			char address[IP_PORT_SIZE];
+			fp = fopen(output_file,"a");
+			sprintf(address, "%s:%s", ip, port);
+			fputs(address,fp);
+			fclose(fp);
+		}	
 	}
 }
-
-
 
 int amount_ips (char file[]) {
 	FILE * fp;
@@ -83,30 +91,30 @@ int amount_ips (char file[]) {
 	return number_of_lines;
 }
 
-
-
-
-int main() {
+int main(int argc, char *argv[] ) {
+		
 	FILE * fp;
-	char line[121];	
-	char file[] = "file.txt";
-        int amount_of_ips;
-	
-	fp = fopen(file,"r");
+	int amount_of_ips;
+	char line[IP_PORT_SIZE];	
+	char file[100];
+	strcpy(file,argv[1]);
+	char output_file[100];
+	strcpy(output_file,argv[2]);
 
 	amount_of_ips = amount_ips(file);
+	
+	char ip_array[amount_of_ips][IP_PORT_SIZE];	
 
-	char * ips[amount_of_ips];
+	fp = fopen(file,"r");
 
 	int a;
 	for (a = 0; a < amount_of_ips; a++)
 	{
-		fgets(line,120,fp);
-		ips[a] = malloc(strlen(line) + 1);
-		strcpy(ips[a], line);
+		fgets(line,IP_PORT_SIZE,fp);
+		strcpy(ip_array[a], line);
 	}
 
 	fclose(fp);
 
-	test_proxies(ips, amount_of_ips);
+	test_proxies(ip_array, amount_of_ips, output_file);
 }

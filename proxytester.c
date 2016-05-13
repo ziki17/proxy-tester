@@ -1,3 +1,5 @@
+/* Thanks to algorism for improvements. */
+
 #define _POSIX_SOURCE
 #include <stdio.h>
 #include <string.h>
@@ -10,133 +12,102 @@
 #include <errno.h>
 #include <unistd.h>
 #include <pthread.h>
-  
-#define IP_PORT_SIZE 22
  
-struct arg_struct {
-    char * addr;
-};
-  
-void * test_proxy (void * arguments)
-{
-  
-    struct arg_struct *args = arguments;
-      
-    char *ip;
-    char *port;
-    char *ptr;
-    ip = strtok_r(args->addr, ":", &ptr);
-    port = strtok_r(NULL, ":", &ptr);
-
+typedef struct Args {
+    char *addr;
+    char outfile[100];
+} Args;
+ 
+void *test_proxy(void *arguments) {
+    Args *args = arguments;
+ 
+    char *ptr = NULL;
+    char *ip = strtok_r(args->addr, ":", &ptr);
+    char *port = strtok_r(NULL, "\n", &ptr);
+ 
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd == -1) {
+        perror("socket");
+        return NULL;
+    }
+ 
     struct sockaddr_in server;
-    int sockfd;
-  
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-  
+    memset(&server, 0, sizeof server);
     server.sin_addr.s_addr = inet_addr(ip);
     server.sin_family = AF_INET;
     server.sin_port = htons(atoi(port));
-    
-    if(connect(sockfd, (struct sockaddr *)&server, sizeof(server)) < 0)
-    {
-		return 0;
-	}
-
+     
+    if (connect(sockfd, (struct sockaddr *)&server, sizeof(server)) < 0) {
+        close(sockfd);
+        perror("connect");
+        return NULL;
+    }
+ 
     char request[] = "HEAD http://www.msn.com HTTP/1.0\r\n\r\n";
-  	
-    if (send(sockfd, request, strlen(request), 0) < 0)
-    {
-		return 0;
+    ssize_t send_ret = send(sockfd, request, strlen(request), 0);
+    if (send_ret == -1) {
+        close(sockfd);
+        perror("send");
+        return NULL;
     }
-
+ 
+    FILE *fout = fopen(args->outfile, "w");
+ 
     char server_reply[500];
-      
-    if (recv(sockfd, server_reply, 500, 0) < 0)
-    {
-		return 0;
+    ssize_t n = 0;
+    while ((n = recv(sockfd, server_reply, sizeof server_reply - 1, 0)) > 0) {
+        server_reply[n] = '\0';
+        fprintf(fout, "%s", server_reply);
     }
-  
-    printf("%s \n \n",server_reply);
-      
+    fputc('\n', fout);
+    if (n == -1)
+        perror("recv");
+ 
+    fclose(fout);
     close(sockfd);
-      
-    if (strstr(server_reply,"HTTP/1.1 200") || 
-        strstr(server_reply,"HTTP/1.1 302") ||
-        strstr(server_reply,"HTTP/1.0 200") || 
-        strstr(server_reply,"HTTP/1.0 302"))
-    {
-        //FILE * fp;
-        //char address[IP_PORT_SIZE];
-        //fp = fopen(args->output_file,"a");
-        //sprintf(address, "%s:%s", ip, port);
-        //fputs(address,fp);
-        //fclose(fp);
-    }    
-
+    return NULL;
 }
-  
-int amount_ips (char file[]) {
-    FILE * fp;
+   
+int count_ips(const char *file) {
     int ch, number_of_lines = 0;
-  
-    fp = fopen(file,"r");
-  
-    do
-    {
+    FILE *fp = fopen(file,"r");
+    do {
         ch = fgetc(fp);
         if(ch == '\n')
             number_of_lines++;
     } while (ch != EOF);
-  
     fclose(fp);
-  
     return number_of_lines;
 }
-  
+   
 int main(int argc, char *argv[] ) {
-          
-    FILE * fp;
-    int amount_of_ips;
-    char line[IP_PORT_SIZE];    
-    char file[100];
-    strcpy(file,argv[1]);
-    char output_file[100];
-    strcpy(output_file,argv[2]);
-
-    amount_of_ips = amount_ips(file);
-      
-    char ip_array[amount_of_ips][IP_PORT_SIZE];    
-  
-    fp = fopen(file,"r");
-  
-    int a;
-    for (a = 0; a < amount_of_ips; a++)
-    {
-        fgets(line,IP_PORT_SIZE,fp);
-        strcpy(ip_array[a], line);
+    char line[100];
+    const char *file = argv[1];
+    const char *output_file = argv[2];
+ 
+    int num_ips = count_ips(file);
+    char ip_array[num_ips][sizeof line];
+   
+    FILE *fp = fopen(file,"r");
+    int i;
+    for (i = 0; i < num_ips; i++) {
+        fgets(line, sizeof line, fp);
+        strcpy(ip_array[i], line);
     }
-  
     fclose(fp);
-  
-    pthread_t proxy_thread[amount_of_ips];
-    struct arg_struct args[amount_of_ips];
-  
-    int b;
-    for (b = 0; b < amount_of_ips; b++)
-    {
-        args[b].addr = (char *) &ip_array[b];
-        
-        if(pthread_create(&proxy_thread[b], NULL, test_proxy, &args[b])) {
-            printf("Error creating");
-        }
+   
+    pthread_t proxy_thread[num_ips];
+    Args args[num_ips];
+    for (i = 0; i < num_ips; i++) {
+        args[i].addr = ip_array[i];
+        sprintf(args[i].outfile, "%s_%d", output_file, i);
+        if (pthread_create(&proxy_thread[i], NULL, test_proxy, &args[i]))
+            perror("pthread_create");
     }
-      
-    int c;
-    for (c = 0; c < amount_of_ips; c++)
-    {
-        if(pthread_join(proxy_thread[c], NULL)) {
-  
-            printf("Error joining thread\n");
-        }
-    }
+       
+    for (i = 0; i < num_ips; i++)
+        if (pthread_join(proxy_thread[i], NULL))
+            perror("pthread_join");
+ 
+    return 0;
 }

@@ -1,5 +1,3 @@
-/* Thanks to algorism for improvements. */
-
 #define _POSIX_SOURCE
 #include <stdio.h>
 #include <string.h>
